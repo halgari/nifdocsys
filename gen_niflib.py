@@ -311,7 +311,7 @@ for n in compound_names:
 
     if not x.template:
         #Get existing custom code
-        file_name = ROOT_DIR + '/src/gen/' + x.cname + '.cpp'
+        file_name = ROOT_DIR + '/src/gen/' + x.cname + '.cs'
         custom_lines = ExtractCustomCode( file_name );
 
         cpp = CFile(file_name, 'w')
@@ -323,14 +323,14 @@ for n in compound_names:
         cpp.code( '//To change this file, alter the niftools/docsys/gen_niflib.py Python script.' )
         cpp.code()
         cpp.code( x.code_include_cpp( True, "../../include/gen/", "../../include/obj/" ) )
-        cpp.code( "using namespace Niflib;" )
+        cpp.code( "using System;" )
         cpp.code()
         cpp.code( '//Constructor' )
         
         # constructor
-        x_code_construct = x.code_construct()
+        x_code_construct = x.code_construct(True)
         #if x_code_construct:
-        cpp.code("%s::%s()"%(x.cname,x.cname) + x_code_construct + " {};")
+        cpp.code("public record %s(%s)" % (x.cname, x_code_construct) + ";")
         cpp.code()
 
         cpp.code('//Copy Constructor')
@@ -728,53 +728,36 @@ for n in block_names:
         
     out.code( '//--END CUSTOM CODE--//' )
     out.code()
-    out.code( '#include "../../include/FixLink.h"' )
-    out.code( '#include "../../include/ObjectRegistry.h"' )
-    out.code( '#include "../../include/NIF_IO.h"' )
-    out.code( x.code_include_cpp( True, "../../include/gen/", "../../include/obj/" ) )
-    out.code( "using namespace Niflib;" );
+    out.code( 'using System;' )
+    out.code()
+    out.code('namespace NifTools')
+    out.code('{')
+    #out.code( x.code_include_cpp( True, "../../include/gen/", "../../include/obj/" ) )
     out.code()
     out.code( '//Definition of TYPE constant' )
     if x.inherit:
-        out.code ( 'const Type ' + x.cname + '::TYPE(\"' + x.cname + '\", &' + x.inherit.cname + '::TYPE );' )
+        out.code('public class ' + x.cname + ' : ' + x.inherit.cname)
     else:
-        out.code ( 'const Type ' + x.cname + '::TYPE(\"' + x.cname + '\", &RefObject::TYPE );' )
+        out.code('public class ' + x.cname)
+    out.code('{')
     out.code()
     x_code_construct = x.code_construct()
+    out.code('public ' + x.cname + '()')
+    out.code('{')
     if x_code_construct:
-        out.code( x.cname + '::' + x.cname + '()' + x_code_construct + ' {' )
-    else:
-        out.code( x.cname + '::' + x.cname + '() {' )
+        out.code(x_code_construct)
     out.code ( '//--BEGIN CONSTRUCTOR CUSTOM CODE--//' )
 
     #Preserve Custom code from before
     for l in custom_lines['CONSTRUCTOR']:
         out.write(l);
         
-    out.code ( '//--END CUSTOM CODE--//')
-    out.code ( '}' )
+    out.code( '//--END CUSTOM CODE--//')
+    out.code( '}' )
     
     out.code()
-    out.code( x.cname + '::' + '~' + x.cname + '() {' )
-    out.code ( '//--BEGIN DESTRUCTOR CUSTOM CODE--//' )
 
-    #Preserve Custom code from before
-    for l in custom_lines['DESTRUCTOR']:
-        out.write(l);
-        
-    out.code ( '//--END CUSTOM CODE--//')
-    out.code ( '}' )
-    out.code() 
-    out.code( 'const Type & %s::GetType() const {'%x.cname )
-    out.code( 'return TYPE;' )
-    out.code( '}' )
-    out.code()
-    out.code( 'NiObject * ' + x.cname + '::Create() {' )
-    out.code( 'return new ' + x.cname + ';' )
-    out.code( '}' )
-    out.code()
-
-    out.code("void %s::Read( istream& in, list<unsigned int> & link_stack, const NifInfo & info ) {"%x.cname)
+    out.code("void Read(BinaryReader in, List<int> link_stack, NifInfo info ) {")
     out.code( '//--BEGIN PRE-READ CUSTOM CODE--//' )
 
     #Preserve Custom code from before
@@ -858,16 +841,6 @@ for n in block_names:
     out.code("}")
     out.code()
 
-    out.code("std::list<NiObjectRef> %s::GetRefs() const {"%x.cname)
-    out.stream(x, ACTION_GETREFS)
-    out.code("}")
-    out.code()
-
-    out.code("std::list<NiObject *> %s::GetPtrs() const {"%x.cname)
-    out.stream(x, ACTION_GETPTRS)
-    out.code("}")
-    out.code()
-
     # Output example implementation of public getter/setter Mmthods if requested
     if GENACCESSORS:
         func_members = []
@@ -900,6 +873,8 @@ for n in block_names:
         out.write(l);
         
     out.code( '//--END CUSTOM CODE--//' )
+    out.code('}')
+    out.code('}')
 
     ##Check if the temp file is identical to the target file
     #OverwriteIfChanged( file_name, 'temp' )

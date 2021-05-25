@@ -331,7 +331,7 @@ class CFile(file):
         if isinstance(block, Block):
             if block.inherit:
                 if action == ACTION_READ:
-                    self.code("%s::Read( %s, link_stack, info );"%(block.inherit.cname, stream))
+                    self.code("base.Read( %s, link_stack, info );"% stream)
                 elif action == ACTION_WRITE:
                     self.code("%s::Write( %s, link_map, missing_link_stack, info );"%(block.inherit.cname, stream))
                 elif action == ACTION_OUT:
@@ -564,9 +564,9 @@ class CFile(file):
                                 self.code("};")
                             # the usual thing
                             elif not y.arg:
-                                self.code("NifStream( %s, %s, info );"%(z, stream))
+                                self.code("%s.NifStream(ref %s, info );"%(stream, z))
                             else:
-                                self.code("NifStream( %s, %s, info, %s%s );"%(z, stream, y_prefix, y.carg))
+                                self.code("%s.NifStream(ref %s, %s, info, %s );"%(stream, z, y_prefix, y.carg))
                     else:
                         # a ref
                         if action == ACTION_READ:
@@ -1165,7 +1165,8 @@ class Option:
             self.description = element.firstChild.nodeValue.strip()
         else:
             self.description = self.name
-        self.cname = self.name.upper().replace(" ", "_").replace("-", "_").replace("/", "_").replace("=", "_")
+        self.cname = self.name.upper().replace(" ", "_").replace("-", "_").replace("/", "_").replace("=", "_").\
+            replace("(", "").replace(")", "").replace("?", "")
 
 class Member:
     """
@@ -1365,9 +1366,12 @@ class Member:
     # construction
     # don't construct anything that hasn't been declared
     # don't construct if it has no default
-    def code_construct(self):
+    def code_construct(self, record=False):
         if self.default and not self.is_duplicate:
-            return "%s(%s)"%(self.cname, self.default)
+            if record:
+                return "%s %s" % (self.ctype, self.cname)
+            else:
+                return "%s = %s;" % (self.cname, self.default)
 
     # declaration
     def code_declare(self, prefix = ""): # prefix is used to tag local variables only
@@ -1591,18 +1595,16 @@ class Compound(Basic):
             elif x == y:
               atx = True
 
-    def code_construct(self):
+    def code_construct(self, record=False):
         # constructor
         result = ''
-        first = True
         for y in self.members:
-            y_code_construct = y.code_construct()
+            y_code_construct = y.code_construct(record)
             if y_code_construct:
-                if not first:
-                    result += ', ' + y_code_construct
+                if record:
+                    result += y_code_construct + '\n'
                 else:
-                    result += ' : ' + y_code_construct
-                    first = False
+                    result += y_code_construct + '\n'
         return result
 
     def code_include_h(self):

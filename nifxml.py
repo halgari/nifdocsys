@@ -108,6 +108,7 @@ import types
 # global data
 #
 
+key_types = []
 native_types = {}
 native_types['TEMPLATE'] = 'T'
 basic_types = {}
@@ -576,7 +577,7 @@ class CFile(file):
                             elif not y.arg:
                                 self.code("%s.NifStream(ref %s, info );"%(stream, z))
                             else:
-                                self.code("%s.NifStream(ref %s, info, %s%s );"%(stream, z, y_prefix, y.carg))
+                                self.code("%s.NifStream(ref %s, info, (KeyType)%s%s );"%(stream, z, y_prefix, y.carg))
                     else:
                         # a ref
                         if action == ACTION_READ:
@@ -1407,6 +1408,8 @@ class Member:
 
         if self.ctemplate:
             if result != "*":
+                if result == "Key":
+                    key_types.append(self.ctemplate)
                 result += "<%s >"%self.ctemplate
             else:
                 result = "Ptr<%s>"%self.ctemplate

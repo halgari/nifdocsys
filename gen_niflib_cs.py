@@ -173,6 +173,59 @@ def generate_blocks():
         cf.code("}")
         cf.code("}")
 
+def generate_key_io():
+    global key_types
+    key_types = list(set(key_types))
+    ignore_keys = ["T", "Quaternion"]
+
+    cf = CFile(join(ROOT_DIR, "KeyIO.cs"), "w")
+    cf.code("using System;")
+    cf.code("using System.IO;")
+    cf.code("namespace SharpNif")
+    cf.code("{")
+
+    cf.code("public static partial class NifReader")
+    cf.code("{")
+
+    for k in key_types:
+        if k in ignore_keys:
+            continue
+        template = """
+    public static void NifStream(this BinaryReader br, ref Key<T> key, NifInfo info, KeyType type) 
+    {
+        key.time = br.ReadSingle();
+    
+        //If key type is not 1, 2, or 3, throw an exception
+        if ( (int)type < 1 || (int)type > 3 ) 
+        {
+            type = KeyType.LINEAR_KEY;
+        }
+    
+        //Read data based on the type of key
+        br.NifStream(ref key.value, info );
+        if ( type == KeyType.QUADRATIC_KEY ) 
+        {
+            //Uses Quadratic interpolation
+            br.NifStream(ref key.forward, info );
+            br.NifStream(ref key.backward, info );
+        } 
+        else if ( type == KeyType.TBC_KEY ) {
+            //Uses TBC interpolation
+            key.tbc.t = br.ReadSingle();
+            key.tbc.b = br.ReadSingle();
+            key.tbc.c = br.ReadSingle();
+        }
+    }
+        """.replace("<T>", "<%s>" % (k,)).split("\n")
+
+        for line in template:
+            cf.code(line.strip())
+
+        cf.code("")
+
+    cf.code("}")
+    cf.code("}")
+
 
 #for blk in itertools.chain(block_types.itervalues(), compound_types.itervalues()):
 #    blk.cname = ctype(blk.cname)
@@ -187,4 +240,5 @@ generate_enums(True)
 generate_enums(False)
 generate_compounds()
 generate_blocks()
-
+key_types.extend(["Color4", "Vector3"])
+generate_key_io()

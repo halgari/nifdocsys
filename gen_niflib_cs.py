@@ -85,13 +85,16 @@ def generate_enums(is_flags):
         cf.code("namespace SharpNif")
         cf.code("{")
 
-        if is_flags:
-            cf.code("[Flags]")
-        cf.code("public enum %s : %s" % (enum.cname, ctype(enum.storage)))
+
+        cf.code("public sealed class %s : RichEnum<%s, %s>" % (enum.cname, ctype(enum.storage), enum.cname))
         cf.code("{")
 
         for o in enum.options:
-            cf.code("%s = %s," % (o.cname, o.value))
+            cf.code("public static readonly %s %s = new(%s);" % (enum.cname, o.cname, o.value))
+
+        cf.code("private %s(%s value) : base(value) {}"% (enum.cname, ctype(enum.storage)))
+        cf.code("public static implicit operator %s(%s value) { return Convert(value); }" % (enum.cname, ctype(enum.storage)))
+        cf.code("public static implicit operator %s(%s value) { return Convert(value); }" % (ctype(enum.storage), enum.cname))
 
         cf.code("}")
 
@@ -196,7 +199,7 @@ def generate_key_io():
         key.time = br.ReadSingle();
     
         //If key type is not 1, 2, or 3, throw an exception
-        if ( (int)type < 1 || (int)type > 3 ) 
+        if ( type < 1 || type > 3 ) 
         {
             type = KeyType.LINEAR_KEY;
         }

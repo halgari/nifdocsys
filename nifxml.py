@@ -566,7 +566,7 @@ class CFile(file):
                             if y.type == "bool" and y.arr1.lhs:
                                 self.code("{");
                                 if action == ACTION_READ:
-                                    self.code("bool tmp;")
+                                    self.code("bool tmp = false;")
                                     self.code("%s.NifStream(ref tmp, info );"%(stream))
                                     self.code("%s = tmp;" % z)
                                 else: # ACTION_WRITE

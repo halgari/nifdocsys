@@ -1,5 +1,15 @@
 # TODO: split in multiple files
 
+CTYPES = {'unsigned int': "uint",
+          "unsigned short": "ushort",
+          #"Ref": "NiObject",
+          #"*": "Ptr",
+          #"string": "NiString"
+          }
+
+def ctype(name):
+    return CTYPES.get(name, name)
+
 """
 This module generates C++ code for Niflib from the NIF file format specification XML.
 
@@ -305,16 +315,16 @@ class CFile(file):
         lastvercond = None
         # stream name
         if action == ACTION_READ:
-            stream = "in"
+            stream = "br"
         else:
-            stream = "out"
+            stream = "bw"
         
 
         # preperation
         if isinstance(block, Block) or block.name in ["Footer", "Header"]:
             if action == ACTION_READ:
                 if block.has_links or block.has_crossrefs:
-                    self.code("unsigned int block_num;")
+                    self.code("uint block_num = 0;")
             if action == ACTION_OUT:
                 self.code("stringstream out;")
                 # declare array_output_count, only if it will actually be used
@@ -359,18 +369,18 @@ class CFile(file):
                     if not y.arr1 or not y.arr1.lhs: # Simple Scalar
                       cref = block.find_member(y.arr1_ref[0], True) 
                       # if not cref.is_duplicate and not cref.next_dup and (not cref.cond.lhs or cref.cond.lhs == y.name):
-                        # self.code('assert(%s%s == (%s)(%s%s.size()));'%(prefix, y.cname, y.ctype, prefix, cref.cname))
-                      self.code('%s%s = (%s)(%s%s.size());'%(prefix, y.cname, y.ctype, prefix, cref.cname))
+                        # self.code('assert(%s%s == (%s)(%s%s.Length));'%(prefix, y.cname, y.ctype, prefix, cref.cname))
+                      self.code('%s%s = (%s)(%s%s.Length);'%(prefix, y.cname, y.ctype, prefix, cref.cname))
                   elif y.arr2_ref: # 1-dimensional dynamic array
                     cref = block.find_member(y.arr2_ref[0], True) 
                     if not y.arr1 or not y.arr1.lhs: # Second dimension
                       # if not cref.is_duplicate and not cref.next_dup (not cref.cond.lhs or cref.cond.lhs == y.name):
-                       # self.code('assert(%s%s == (%s)((%s%s.size() > 0) ? %s%s[0].size() : 0));'%(prefix, y.cname, y.ctype, prefix, cref.cname, prefix, cref.cname))
-                      self.code('%s%s = (%s)((%s%s.size() > 0) ? %s%s[0].size() : 0);'%(prefix, y.cname, y.ctype, prefix, cref.cname, prefix, cref.cname))
+                       # self.code('assert(%s%s == (%s)((%s%s.Length > 0) ? %s%s[0].size() : 0));'%(prefix, y.cname, y.ctype, prefix, cref.cname, prefix, cref.cname))
+                      self.code('%s%s = (%s)((%s%s.Length > 0) ? %s%s[0].Length : 0);'%(prefix, y.cname, y.ctype, prefix, cref.cname, prefix, cref.cname))
                     else:
                         # index of dynamically sized array
-                        self.code('for (unsigned int i%i = 0; i%i < %s%s.size(); i%i++)'%(self.indent, self.indent, prefix, cref.cname, self.indent))
-                        self.code('\t%s%s[i%i] = (%s)(%s%s[i%i].size());'%(prefix, y.cname, self.indent, y.ctype, prefix, cref.cname, self.indent))
+                        self.code('for (var i%i = 0; i%i < %s%s.Length; i%i++)'%(self.indent, self.indent, prefix, cref.cname, self.indent))
+                        self.code('\t%s%s[i%i] = (%s)(%s%s[i%i].Length);'%(prefix, y.cname, self.indent, y.ctype, prefix, cref.cname, self.indent))
                   # else: #has duplicates needs to be selective based on version
                     # self.code('assert(!"%s");'%(y.name))
             block.members.reverse() # undo reverse
@@ -507,15 +517,15 @@ class CFile(file):
                     if action == ACTION_READ:
                       # default to local variable, check if variable is in current scope if not then try to use
                       #   definition from resized child
-                      memcode = "%s%s.resize(%s);"%(y_prefix, y.cname, y.arr1.code(y_arr1_prefix))
+                      memcode = "Array.Resize(ref %s%s, (int)%s);"%(y_prefix, y.cname, y.arr1.code(y_arr1_prefix))
                       mem = block.find_member(y.arr1.lhs, True) # find member in self or parents
                       self.code(memcode)
                       
                     self.code(\
-                        "for (unsigned int i%i = 0; i%i < %s%s.size(); i%i++) {"%(self.indent, self.indent, y_prefix, y.cname, self.indent))
+                        "for (var i%i = 0; i%i < %s%s.Length; i%i++) {"%(self.indent, self.indent, y_prefix, y.cname, self.indent))
                 else:
                     self.code(\
-                        "for (unsigned int i%i = 0; i%i < %s; i%i++) {"\
+                        "for (var i%i = 0; i%i < %s; i%i++) {"\
                         %(self.indent, self.indent, y.arr1.code(y_arr1_prefix), self.indent))
                 if action == ACTION_OUT:
                         self.code('if ( !verbose && ( array_output_count > MAXARRAYDUMP ) ) {')
@@ -529,19 +539,19 @@ class CFile(file):
                     if not y.arr2_dynamic:
                         if y.arr2.lhs.isdigit() == False:
                             if action == ACTION_READ:
-                                self.code("%s%s[i%i].resize(%s);"%(y_prefix, y.cname, self.indent-1, y.arr2.code(y_arr2_prefix)))
+                                self.code("Array.Resize(ref %s%s[i%i], (int)%s);"%(y_prefix, y.cname, self.indent-1, y.arr2.code(y_arr2_prefix)))
                             self.code(\
-                                "for (unsigned int i%i = 0; i%i < %s%s[i%i].size(); i%i++) {"\
+                                "for (var i%i = 0; i%i < %s%s[i%i].Length; i%i++) {"\
                                 %(self.indent, self.indent, y_prefix, y.cname, self.indent-1, self.indent))
                         else:
                             self.code(\
-                                "for (unsigned int i%i = 0; i%i < %s; i%i++) {"\
+                                "for (var i%i = 0; i%i < %s; i%i++) {"\
                                 %(self.indent, self.indent, y.arr2.code(y_arr2_prefix), self.indent))
                     else:
                         if action == ACTION_READ:
-                            self.code("%s%s[i%i].resize(%s[i%i]);"%(y_prefix, y.cname, self.indent-1, y.arr2.code(y_arr2_prefix), self.indent-1))
+                            self.code("Array.Resize(ref %s%s[i%i], (int)%s[i%i]);"%(y_prefix, y.cname, self.indent-1, y.arr2.code(y_arr2_prefix), self.indent-1))
                         self.code(\
-                            "for (unsigned int i%i = 0; i%i < %s[i%i]; i%i++) {"\
+                            "for (var i%i = 0; i%i < %s[i%i]; i%i++) {"\
                             %(self.indent, self.indent, y.arr2.code(y_arr2_prefix), self.indent-1, self.indent))
                     z = "%s%s[i%i][i%i]"%(y_prefix, y.cname, self.indent-2, self.indent-1)
     
@@ -556,22 +566,22 @@ class CFile(file):
                                 self.code("{");
                                 if action == ACTION_READ:
                                     self.code("bool tmp;")
-                                    self.code("NifStream( tmp, %s, info );"%(stream))
+                                    self.code("%s.NifStream(ref tmp, info );"%(stream))
                                     self.code("%s = tmp;" % z)
                                 else: # ACTION_WRITE
                                     self.code("bool tmp = %s;" % z)
-                                    self.code("NifStream( tmp, %s, info );"%(stream))
+                                    self.code("%s.NifStream(ref tmp, info );"%(stream))
                                 self.code("};")
                             # the usual thing
                             elif not y.arg:
                                 self.code("%s.NifStream(ref %s, info );"%(stream, z))
                             else:
-                                self.code("%s.NifStream(ref %s, %s, info, %s );"%(stream, z, y_prefix, y.carg))
+                                self.code("%s.NifStream(ref %s, info, %s%s );"%(stream, z, y_prefix, y.carg))
                     else:
                         # a ref
                         if action == ACTION_READ:
-                            self.code("NifStream( block_num, %s, info );"%stream)
-                            self.code("link_stack.push_back( block_num );")
+                            self.code("%s.NifStream(ref block_num, info );"%stream)
+                            self.code("link_stack.Add( block_num );")
                         elif action == ACTION_WRITE:
                             self.code("if ( info.version < VER_3_3_0_13 ) {")
                             self.code("WritePtr32( &(*%s), %s );"%(z, stream))
@@ -580,14 +590,14 @@ class CFile(file):
                             self.code("map<NiObjectRef,unsigned int>::const_iterator it = link_map.find( StaticCast<NiObject>(%s) );" % z)
                             self.code("if (it != link_map.end()) {")
                             self.code("NifStream( it->second, %s, info );"%stream)
-                            self.code("missing_link_stack.push_back( NULL );")
+                            self.code("missing_link_stack.Add( NULL );")
                             self.code("} else {")
                             self.code("NifStream( 0xFFFFFFFF, %s, info );"%stream)
-                            self.code("missing_link_stack.push_back( %s );" %z)
+                            self.code("missing_link_stack.Add( %s );" %z)
                             self.code("}")
                             self.code("} else {")
                             self.code("NifStream( 0xFFFFFFFF, %s, info );"%stream)
-                            self.code("missing_link_stack.push_back( NULL );")
+                            self.code("missing_link_stack.Add( NULL );")
                             self.code("}")
                             self.code("}")
                         elif action == ACTION_FIXLINKS:
@@ -595,10 +605,10 @@ class CFile(file):
                                 
                         elif action == ACTION_GETREFS and subblock.is_link:
                             if not y.is_duplicate:
-                                self.code('if ( %s != NULL )\n\trefs.push_back(StaticCast<NiObject>(%s));'%(z,z))
+                                self.code('if ( %s != NULL )\n\trefs.Add(StaticCast<NiObject>(%s));'%(z,z))
                         elif action == ACTION_GETPTRS and subblock.is_crossref:
                             if not y.is_duplicate:
-                                self.code('if ( %s != NULL )\n\tptrs.push_back((NiObject *)(%s));'%(z,z))
+                                self.code('if ( %s != NULL )\n\tptrs.Add((NiObject *)(%s));'%(z,z))
                 # the following actions don't distinguish between refs and non-refs
                 elif action == ACTION_OUT:
                     if not y.arr1.lhs:
@@ -669,6 +679,8 @@ def class_name(n):
     try:
         return native_types[n]
     except KeyError:
+        if n == "string":
+            return "NiString"
         return n.replace(' ', '_')
 
     if n == None: return None
@@ -734,6 +746,10 @@ def member_name(n):
         else:
             n2 += '_'
             lower = True
+    if n2 == "base":
+        n2 = "mbase"
+    if n2 == "string":
+        n2 = "mstring"
     return n2
     
 def version2number(s):
@@ -1057,7 +1073,7 @@ class Expression(object):
             if isinstance(self.lhs, types.IntType):
                 return self.lhs               
             elif self.lhs in block_types:
-                return 'IsDerivedType(%s::TYPE)' % self.lhs
+                return 'GetType().IsSubclassOf(typeof(%s))' % self.lhs
             else:
                 return prefix + (name_filter(self.lhs) if name_filter else self.lhs)
         elif self._op == '!':
@@ -1065,7 +1081,7 @@ class Expression(object):
             if isinstance(lhs, Expression):
                 lhs = lhs.code(prefix, True, name_filter)
             elif lhs in block_types:
-                lhs = 'IsDerivedType(%s::TYPE)' % lhs
+                lhs = 'GetType().IsSubclassOf(typeof(%s))' % lhs
             elif lhs and not lhs.isdigit() and not lhs.startswith('0x'):
                 lhs = prefix + (name_filter(lhs) if name_filter else lhs)
             return '%s%s%s%s'%(lbracket, self._op, lhs, rbracket)
@@ -1075,13 +1091,13 @@ class Expression(object):
             if isinstance(lhs, Expression):
                 lhs = lhs.code(prefix, True, name_filter)
             elif lhs in block_types:
-                lhs = 'IsDerivedType(%s::TYPE)' % lhs
+                lhs = 'GetType().IsSubclassOf(typeof(%s))' % lhs
             elif lhs and not lhs.isdigit() and not lhs.startswith('0x'):
                 lhs = prefix + (name_filter(lhs) if name_filter else lhs)
             if isinstance(rhs, Expression):
                 rhs = rhs.code(prefix, True, name_filter)
             elif rhs in block_types:
-                rhs = 'IsDerivedType(%s::TYPE)' % rhs
+                rhs = 'GetType().IsSubclassOf(typeof(%s))' % rhs
             elif rhs and not rhs.isdigit() and not rhs.startswith('0x'):
                 rhs = prefix + (name_filter(rhs) if name_filter else rhs)
             return '%s%s %s %s%s'%(lbracket, lhs, self._op, rhs, rbracket)
@@ -1375,39 +1391,40 @@ class Member:
 
     # declaration
     def code_declare(self, prefix = ""): # prefix is used to tag local variables only
-        result = self.ctype
+        result = ctype(self.ctype)
         suffix1 = ""
         suffix2 = ""
-        keyword = ""
-        if not self.is_duplicate: # is dimension for one or more arrays
-          if self.arr1_ref:
-            if not self.arr1 or not self.arr1.lhs: # Simple Scalar
-              keyword = "mutable "
-          elif self.arr2_ref: # 1-dimensional dynamic array
-              keyword = "mutable "
-          elif self.is_calculated:
-              keyword = "mutable "
+        keyword = "internal "
+        #
+        #if not self.is_duplicate: # is dimension for one or more arrays
+        #  if self.arr1_ref:
+        #    if not self.arr1 or not self.arr1.lhs: # Simple Scalar
+        #      keyword += "mutable "
+        #  elif self.arr2_ref: # 1-dimensional dynamic array
+        #      keyword += "mutable "
+        #  elif self.is_calculated:
+        #      keyword += "mutable "
 
         if self.ctemplate:
             if result != "*":
                 result += "<%s >"%self.ctemplate
             else:
-                result = "%s *"%self.ctemplate
+                result = "Ptr<%s>"%self.ctemplate
         if self.arr1.lhs:
             if self.arr1.lhs.isdigit():
                 if self.arr2.lhs and self.arr2.lhs.isdigit():
-                      result = "array< %s, array<%s,%s > >"%(self.arr1.lhs, self.arr2.lhs, result)
+                      result = "%s[][]" % (result, )
                 else:
-                      result = "array<%s,%s >"%(self.arr1.lhs, result) 
+                      result = "%s[]" % (result,)
             else:
                 if self.arr2.lhs and self.arr2.lhs.isdigit():
-                    result = "vector< array<%s,%s > >"%(self.arr2.lhs, result)
+                    result = "%s[][]" % (result,)
                 else:
                     if self.arr2.lhs:
-                        result = "vector< vector<%s > >"%result
+                        result = "%s[][]" % result
                     else:
-                        result = "vector<%s >"%result
-        result = keyword + result + " " + prefix + self.cname + suffix1 + suffix2 + ";"
+                        result = "%s[]"%result
+        result = keyword + result + " " + prefix + ctype(self.cname) + suffix1 + suffix2 + ";"
         return result
 
     def getter_declare(self, scope = "", suffix = ""):

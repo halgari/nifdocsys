@@ -69,15 +69,7 @@ import itertools
 
 ROOT_DIR = r"c:\oss\SharpNif\SharpNif\Generated"
 
-CTYPES = {'unsigned int': "uint",
-          "unsigned short": "ushort",
-          "Ref": "NiObject",
-          "*": "Ptr",
-          #"string": "NiString"
-          }
 
-def ctype(name):
-    return CTYPES.get(name, name)
 
 
 
@@ -88,12 +80,14 @@ def generate_enums(is_flags):
         cf = CFile(join(ROOT_DIR, "Flags" if is_flags else "Enums", enum.cname + ".cs"), "w")
 
         cf.code("using System;")
+        cf.code("using System.IO;")
+
         cf.code("namespace SharpNif")
         cf.code("{")
 
         if is_flags:
             cf.code("[Flags]")
-        cf.code("public enum %s : %s" % (enum.cname, enum.storage))
+        cf.code("public enum %s : %s" % (enum.cname, ctype(enum.storage)))
         cf.code("{")
 
         for o in enum.options:
@@ -101,14 +95,12 @@ def generate_enums(is_flags):
 
         cf.code("}")
 
-        cf.code("public partial class NifReader")
+        cf.code("public static partial class NifReader")
         cf.code("{")
-        cf.code("public void Read(ref %s data)" % (enum.cname,))
+        cf.code("public static void NifStream(this BinaryReader br, ref %s data, NifInfo info)" % (ctype(enum.cname),))
         cf.code("{")
 
-        cf.code("%s tmp = default;" % (enum.storage,))
-        cf.code("Read(ref tmp);")
-        cf.code("data = (%s)tmp;" % (enum.cname,))
+        cf.code("throw new NotImplementedException();")
 
         cf.code("}")
         cf.code("}")
@@ -117,53 +109,18 @@ def generate_enums(is_flags):
 
 
 def write_member_definitions(cf, block):
-    for member in block.members:
-        if member.is_duplicate:
-            continue
-        if member.arr1.lhs:
-            if member.ctemplate:
-                cf.code("internal %s<%s>[] _%s;" % (member.ctype, member.ctemplate, member.cname))
-            else:
-                cf.code("internal %s[] _%s;" % (member.ctype, member.cname))
-        else:
-            cf.code("internal %s _%s;" % (member.ctype, member.cname))
+    cf.stream(block, "ACTION_READ")
+    #for member in block.members:
+    #    if member.is_duplicate:
+    #        continue
+    #    cf.code(member.code_declare(prefix="_"))
 
 def write_io_overrides(cf, block):
-
-    cf.code("public partial class NifReader")
+    cf.code("internal void Read(BinaryReader br, List<uint> link_stack, NifInfo info ) {")
     cf.code("{")
 
-    if block.template:
-        cf.code("public void Read<T>(ref %s<T> data)" % (block.cname,))
-    else:
-        cf.code("public void Read(ref %s data)" % (block.cname,))
+    cf.stream(block, ACTION_READ)
 
-    cf.code("{")
-
-    def name_filter(s):
-        if (s.isdigit()):
-            return s
-        return "data._" + member_name(s)
-
-    if hasattr(block, "inherit") and block.inherit:
-        cf.code("var parent = (%s)data;" % (block.inherit.cname,))
-        cf.code("Read(ref parent);")
-        cf.code("")
-
-    for member in block.members:
-        if member.arr1.lhs:
-            if member.ctemplate:
-                cf.code("data._%s = new %s<%s>[%s];" % (member.cname, member.ctype, member.ctemplate, member.arr1.code(name_filter=name_filter)))
-            else:
-                cf.code("data._%s = new %s[%s];" % (member.cname, member.ctype, member.arr1.code(name_filter=name_filter)))
-            cf.code("for (var idx = 0; idx < %s; idx ++) Read(ref data._%s[idx]);" % (member.arr1.code(name_filter=name_filter), member.cname))
-        elif member.ctype == "T":
-            cf.code("Read<T>(ref data._%s);" % (member.cname,))
-        else:
-            cf.code("Read(ref data._%s);" % (member.cname,))
-            cf.code("")
-
-    cf.code("}")
     cf.code("}")
 
 def generate_compounds():
@@ -173,6 +130,7 @@ def generate_compounds():
         cf = CFile(join(ROOT_DIR, "Compounds", compound.cname + ".cs"), "w")
 
         cf.code("using System;")
+        cf.code("using System.Collections.Generic;")
         cf.code("namespace SharpNif")
         cf.code("{")
 
@@ -183,11 +141,9 @@ def generate_compounds():
 
         cf.code("{")
 
-        write_member_definitions(cf, compound)
+        cf.declare(compound)
 
         cf.code("}")
-
-        write_io_overrides(cf, compound)
 
         cf.code("}")
 
@@ -198,6 +154,9 @@ def generate_blocks():
         cf = CFile(join(ROOT_DIR, "Blocks", block.cname + ".cs"), "w")
 
         cf.code("using System;")
+        cf.code("using System.Collections.Generic;")
+        cf.code("using System.IO;")
+
         cf.code("namespace SharpNif")
         cf.code("{")
 
@@ -207,23 +166,22 @@ def generate_blocks():
             cf.code("public class %s" % (block.cname,))
         cf.code("{")
 
-        write_member_definitions(cf, block)
-
-        cf.code("}")
+        cf.declare(block)
 
         write_io_overrides(cf, block);
-
+        cf.code("}")
+        cf.code("}")
         cf.code("}")
 
 
-for blk in itertools.chain(block_types.itervalues(), compound_types.itervalues()):
-    blk.cname = ctype(blk.cname)
+#for blk in itertools.chain(block_types.itervalues(), compound_types.itervalues()):
+#    blk.cname = ctype(blk.cname)
 
-    for member in blk.members:
-        member.ctype = ctype(member.ctype)
+#    for member in blk.members:
+#        member.ctype = ctype(member.ctype)
 
-for enum in itertools.chain(enum_types.itervalues(), flag_types.itervalues()):
-    enum.storage = ctype(enum.storage)
+#for enum in itertools.chain(enum_types.itervalues(), flag_types.itervalues()):
+#    enum.storage = ctype(enum.storage)
 
 generate_enums(True)
 generate_enums(False)

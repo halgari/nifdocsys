@@ -94,7 +94,6 @@ def generate_enums(is_flags):
 
         cf.code("private %s(%s value) : base(value) {}"% (enum.cname, ctype(enum.storage)))
         cf.code("public static implicit operator %s(%s value) { return Convert(value); }" % (enum.cname, ctype(enum.storage)))
-        cf.code("public static implicit operator %s(%s value) { return Convert(value); }" % (ctype(enum.storage), enum.cname))
 
         cf.code("}")
 
@@ -103,7 +102,9 @@ def generate_enums(is_flags):
         cf.code("public static void NifStream(this BinaryReader br, ref %s data, NifInfo info)" % (ctype(enum.cname),))
         cf.code("{")
 
-        cf.code("throw new NotImplementedException();")
+        cf.code("%s tmp = default;" % (ctype(enum.storage)))
+        cf.code("br.NifStream(ref tmp, info);")
+        cf.code("data = tmp;")
 
         cf.code("}")
         cf.code("}")
@@ -138,9 +139,9 @@ def generate_compounds():
         cf.code("{")
 
         if compound.template:
-            cf.code("public struct %s<T>" % (compound.cname,))
+            cf.code("public partial struct %s<T>" % (compound.cname,))
         else:
-            cf.code("public struct %s" % (compound.cname,))
+            cf.code("public partial struct %s" % (compound.cname,))
 
         cf.code("{")
 
@@ -164,9 +165,9 @@ def generate_blocks():
         cf.code("{")
 
         if block.inherit:
-            cf.code("public class %s : %s" % (block.cname, block.inherit.cname))
+            cf.code("public partial class %s : %s" % (block.cname, block.inherit.cname))
         else:
-            cf.code("public class %s" % (block.cname,))
+            cf.code("public partial class %s" % (block.cname,))
         cf.code("{")
 
         cf.declare(block)
